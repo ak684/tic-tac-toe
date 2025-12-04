@@ -114,11 +114,15 @@ jobs:
           import os
           import sys
           from pathlib import Path
-          from openhands.sdk import LLM, Conversation, get_logger
+          from openhands.sdk import Agent, LLM, Conversation, get_logger
           from openhands.sdk.conversation import get_agent_final_response
           from openhands.sdk.utils.github import sanitize_openhands_mentions
+          from openhands.sdk.context.agent_context import AgentContext
           from openhands.sdk.context.skills import load_skills_from_dir
-          from openhands.tools.preset.default import get_default_agent
+          from openhands.tools.preset.default import (
+              get_default_tools,
+              get_default_condenser,
+          )
 
           logger = get_logger(__name__)
 
@@ -151,30 +155,7 @@ jobs:
 
               repo_root = Path.cwd()
               skills = _load_repo_skills(repo_root)
-              skills_text = ""
-              if skills:
-                  logger.info(f"Loaded {len(skills)} repo skills for context")
-                  skills_text = "\nRepository instructions:\n" + "\n\n".join(
-                      f"- {s.name}:\n{s.content}" for s in skills
-                  )
-
-              prompt = f"""
-You are fixing CI failures on PR #{os.getenv("PR_NUMBER")} in {os.getenv("REPO_NAME")}.
-The PR title is: {os.getenv("PR_TITLE", "(no title)")}.
-{skills_text}
-
-Goals:
-1) Reproduce the failing checks locally (run the same tests/build the CI runs).
-2) Fix the failures. Prioritize dependency bumps and test fixes.
-3) Commit changes to the current branch (already checked out) and push if needed.
-4) Leave a concise summary of what you changed.
-
-Notes:
-- Branch checked out: {os.getenv("PR_HEAD_BRANCH")}
-- Base branch: {os.getenv("PR_BASE_BRANCH")}
-- If tests already pass locally, state that and exit.
-- Do not force-push; use the existing branch and push normally.
-"""
+              agent_context = AgentContext(skills=skills) if skills else None
 
               llm = LLM(
                   model=llm_model,
@@ -184,8 +165,40 @@ Notes:
                   drop_params=True,
               )
 
-              agent = get_default_agent(llm=llm, cli_mode=True)
+              tools = get_default_tools(enable_browser=False)
+              condenser = get_default_condenser(
+                  llm.model_copy(update={"usage_id": "condenser"})
+              )
+
+              agent_kwargs = dict(
+                  llm=llm,
+                  tools=tools,
+                  system_prompt_kwargs={"cli_mode": True},
+                  condenser=condenser,
+              )
+              if agent_context:
+                  agent_kwargs["agent_context"] = agent_context
+
+              agent = Agent(**agent_kwargs)
               convo = Conversation(agent=agent, workspace=os.getcwd())
+
+              prompt = f"""
+You are fixing CI failures on PR #{os.getenv('PR_NUMBER')} in {os.getenv('REPO_NAME')}.
+The PR title is: {os.getenv('PR_TITLE', '(no title)')}.
+
+Goals:
+1) Reproduce the failing checks locally (run the same tests/build the CI runs).
+2) Fix the failures. Prioritize dependency bumps and test fixes.
+3) Commit changes to the current branch (already checked out) and push if needed.
+4) Leave a concise summary of what you changed.
+
+Notes:
+- Branch checked out: {os.getenv('PR_HEAD_BRANCH')}
+- Base branch: {os.getenv('PR_BASE_BRANCH')}
+- If tests already pass locally, state that and exit.
+- Do not force-push; use the existing branch and push normally.
+"""
+
               convo.send_message(prompt.strip())
               convo.run()
 
