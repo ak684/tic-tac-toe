@@ -155,6 +155,8 @@ jobs:
 
               repo_root = Path.cwd()
               skills = _load_repo_skills(repo_root)
+              if skills:
+                  logger.info(f"Loaded {len(skills)} repo skills for context")
               agent_context = AgentContext(skills=skills) if skills else None
 
               llm = LLM(
