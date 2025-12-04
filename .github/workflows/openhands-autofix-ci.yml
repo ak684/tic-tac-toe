@@ -114,12 +114,15 @@ jobs:
           import os
           import sys
           from pathlib import Path
-          from openhands.sdk import LLM, Conversation, get_logger
+          from openhands.sdk import Agent, LLM, Conversation, get_logger
           from openhands.sdk.conversation import get_agent_final_response
           from openhands.sdk.utils.github import sanitize_openhands_mentions
           from openhands.sdk.context.agent_context import AgentContext
           from openhands.sdk.context.skills import load_skills_from_dir
-          from openhands.tools.preset.default import get_default_agent
+          from openhands.tools.preset.default import (
+              get_default_tools,
+              get_default_condenser,
+          )
 
           logger = get_logger(__name__)
 
@@ -178,11 +181,23 @@ jobs:
               skills = _load_repo_skills(repo_root)
               if skills:
                   logger.info(f"Loaded {len(skills)} repo skills for context")
-                  agent_context = AgentContext(skills=skills)
-              else:
-                  agent_context = None
+              agent_context = AgentContext(skills=skills) if skills else None
 
-              agent = get_default_agent(llm=llm, cli_mode=True, agent_context=agent_context)
+              tools = get_default_tools(enable_browser=False)
+              condenser = get_default_condenser(
+                  llm.model_copy(update={"usage_id": "condenser"})
+              )
+
+              agent_kwargs = dict(
+                  llm=llm,
+                  tools=tools,
+                  system_prompt_kwargs={"cli_mode": True},
+                  condenser=condenser,
+              )
+              if agent_context:
+                  agent_kwargs["agent_context"] = agent_context
+
+              agent = Agent(**agent_kwargs)
               convo = Conversation(agent=agent, workspace=os.getcwd())
               convo.send_message(prompt.strip())
               convo.run()
