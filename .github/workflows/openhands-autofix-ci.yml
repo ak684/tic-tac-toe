@@ -126,6 +126,7 @@ jobs:
 
           logger = get_logger(__name__)
 
+
           def _load_repo_skills(repo_root: Path) -> list:
               """Load repo skills from .openhands/skills and legacy .openhands/microagents."""
               skills: list = []
@@ -145,29 +146,18 @@ jobs:
                   logger.error(f"Missing required env vars: {missing}")
                   sys.exit(1)
 
-              prompt = f"""
-              You are fixing CI failures on PR #{os.getenv("PR_NUMBER")} in {os.getenv("REPO_NAME")}.
-              The PR title is: {os.getenv("PR_TITLE", "(no title)")}.
-
-              Goals:
-              1) Reproduce the failing checks locally (run the same tests/build the CI runs).
-              2) Fix the failures. Prioritize dependency bumps and test fixes.
-              3) Commit changes to the current branch (already checked out) and push if needed.
-              4) Leave a concise summary of what you changed.
-
-              Notes:
-              - Branch checked out: {os.getenv("PR_HEAD_BRANCH")}
-              - Base branch: {os.getenv("PR_BASE_BRANCH")}
-              - If tests already pass locally, state that and exit.
-              - Do not force-push; use the existing branch and push normally.
-              """
-
               llm_model = os.getenv("LLM_MODEL")
               llm_base_url = os.getenv("LLM_BASE_URL")
               missing = [name for name, val in {"LLM_MODEL": llm_model, "LLM_BASE_URL": llm_base_url}.items() if not val]
               if missing:
                   logger.error(f"Missing required env vars: {missing}")
                   sys.exit(1)
+
+              repo_root = Path.cwd()
+              skills = _load_repo_skills(repo_root)
+              if skills:
+                  logger.info(f"Loaded {len(skills)} repo skills for context")
+              agent_context = AgentContext(skills=skills) if skills else None
 
               llm = LLM(
                   model=llm_model,
@@ -176,12 +166,6 @@ jobs:
                   usage_id="ci_autofix_agent",
                   drop_params=True,
               )
-
-              repo_root = Path.cwd()
-              skills = _load_repo_skills(repo_root)
-              if skills:
-                  logger.info(f"Loaded {len(skills)} repo skills for context")
-              agent_context = AgentContext(skills=skills) if skills else None
 
               tools = get_default_tools(enable_browser=False)
               condenser = get_default_condenser(
@@ -199,6 +183,24 @@ jobs:
 
               agent = Agent(**agent_kwargs)
               convo = Conversation(agent=agent, workspace=os.getcwd())
+
+              prompt = f"""
+You are fixing CI failures on PR #{os.getenv('PR_NUMBER')} in {os.getenv('REPO_NAME')}.
+The PR title is: {os.getenv('PR_TITLE', '(no title)')}.
+
+Goals:
+1) Reproduce the failing checks locally (run the same tests/build the CI runs).
+2) Fix the failures. Prioritize dependency bumps and test fixes.
+3) Commit changes to the current branch (already checked out) and push if needed.
+4) Leave a concise summary of what you changed.
+
+Notes:
+- Branch checked out: {os.getenv('PR_HEAD_BRANCH')}
+- Base branch: {os.getenv('PR_BASE_BRANCH')}
+- If tests already pass locally, state that and exit.
+- Do not force-push; use the existing branch and push normally.
+"""
+
               convo.send_message(prompt.strip())
               convo.run()
 
@@ -209,6 +211,7 @@ jobs:
                   print(final)
               else:
                   logger.warning("No final response from agent.")
+
 
           if __name__ == "__main__":
               main()
