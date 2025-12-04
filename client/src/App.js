@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import Missing from './Missing';
 import GameHistory from './GameHistory';
 
 // API URL - adjust if needed
