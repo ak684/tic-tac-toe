@@ -154,27 +154,27 @@ jobs:
               skills_text = ""
               if skills:
                   logger.info(f"Loaded {len(skills)} repo skills for context")
-                  skills_text = "\\nRepository instructions:\\n" + "\\n\\n".join(
-                      f"- {s.name}:\\n{s.content}" for s in skills
+                  skills_text = "\nRepository instructions:\n" + "\n\n".join(
+                      f"- {s.name}:\n{s.content}" for s in skills
                   )
 
-              prompt = f\"\"\"
-              You are fixing CI failures on PR #{os.getenv('PR_NUMBER')} in {os.getenv('REPO_NAME')}.
-              The PR title is: {os.getenv('PR_TITLE', '(no title)')}.
-              {skills_text}
+              prompt = f"""
+You are fixing CI failures on PR #{os.getenv("PR_NUMBER")} in {os.getenv("REPO_NAME")}.
+The PR title is: {os.getenv("PR_TITLE", "(no title)")}.
+{skills_text}
 
-              Goals:
-              1) Reproduce the failing checks locally (run the same tests/build the CI runs).
-              2) Fix the failures. Prioritize dependency bumps and test fixes.
-              3) Commit changes to the current branch (already checked out) and push if needed.
-              4) Leave a concise summary of what you changed.
+Goals:
+1) Reproduce the failing checks locally (run the same tests/build the CI runs).
+2) Fix the failures. Prioritize dependency bumps and test fixes.
+3) Commit changes to the current branch (already checked out) and push if needed.
+4) Leave a concise summary of what you changed.
 
-              Notes:
-              - Branch checked out: {os.getenv('PR_HEAD_BRANCH')}
-              - Base branch: {os.getenv('PR_BASE_BRANCH')}
-              - If tests already pass locally, state that and exit.
-              - Do not force-push; use the existing branch and push normally.
-              \"\"\"
+Notes:
+- Branch checked out: {os.getenv("PR_HEAD_BRANCH")}
+- Base branch: {os.getenv("PR_BASE_BRANCH")}
+- If tests already pass locally, state that and exit.
+- Do not force-push; use the existing branch and push normally.
+"""
 
               llm = LLM(
                   model=llm_model,
@@ -192,7 +192,7 @@ jobs:
               final = get_agent_final_response(convo.state.events)
               if final:
                   final = sanitize_openhands_mentions(final)
-                  print("\\n=== Agent Summary ===\\n")
+                  print("\n=== Agent Summary ===\n")
                   print(final)
               else:
                   logger.warning("No final response from agent.")
