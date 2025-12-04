@@ -1,0 +1,238 @@
+name: OpenHands Auto-Fix CI Failures
+
+on:
+  # Fire when a workflow run on a PR finishes and fails. Update the list below to
+  # match your primary CI workflow names.
+  workflow_run:
+    workflows:
+      - CI
+      - Test
+      - Build and Test
+    types:
+      - completed
+  # Allow manual runs for testing or ad-hoc fixes.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to auto-fix (only for manual runs)"
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  autofix:
+    # Only run on failing workflow runs, or when manually invoked.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.event == 'pull_request')
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${{ github.repository }}
+      # Prefer Actions variables (Repository/Org/Env variables) but fall back to secrets.
+      LLM_MODEL: ${{ vars.LLM_MODEL || secrets.LLM_MODEL }}
+      LLM_BASE_URL: ${{ vars.LLM_BASE_URL || secrets.LLM_BASE_URL }}
+    steps:
+      - name: Derive PR metadata
+        id: metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -z "${{ inputs.pr_number }}" ]]; then
+              echo "Manual run requires pr_number input." >&2
+              exit 1
+            fi
+            pr_json="$(gh pr view ${{ inputs.pr_number }} --repo "$REPO_NAME" --json headRefName,baseRefName,title)"
+            pr_head="$(echo "$pr_json" | jq -r '.headRefName')"
+            pr_base="$(echo "$pr_json" | jq -r '.baseRefName')"
+            pr_title="$(echo "$pr_json" | jq -r '.title')"
+
+            if [[ -z "$pr_head" || "$pr_head" == "null" ]]; then
+              echo "Could not determine head branch for PR #${{ inputs.pr_number }}." >&2
+              exit 1
+            fi
+
+            echo "PR_NUMBER=${{ inputs.pr_number }}" >> "$GITHUB_ENV"
+            echo "PR_HEAD_BRANCH=$pr_head" >> "$GITHUB_ENV"
+            echo "PR_BASE_BRANCH=$pr_base" >> "$GITHUB_ENV"
+            echo "PR_TITLE=$pr_title" >> "$GITHUB_ENV"
+          else
+            # workflow_run payload carries the PR info
+            pr_number="${{ github.event.workflow_run.pull_requests[0].number }}"
+            pr_title="${{ github.event.workflow_run.pull_requests[0].title }}"
+            pr_head="${{ github.event.workflow_run.head_branch }}"
+            pr_base="${{ github.event.workflow_run.pull_requests[0].base.ref }}"
+
+            if [[ -z "$pr_number" || -z "$pr_head" ]]; then
+              echo "No PR context available; skipping." >&2
+              exit 1
+            fi
+
+            echo "PR_NUMBER=$pr_number" >> "$GITHUB_ENV"
+            echo "PR_TITLE=$pr_title" >> "$GITHUB_ENV"
+            echo "PR_HEAD_BRANCH=$pr_head" >> "$GITHUB_ENV"
+            echo "PR_BASE_BRANCH=$pr_base" >> "$GITHUB_ENV"
+          fi
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          # When workflow_run is used, the event payload carries the head repo/branch.
+          repository: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_repository.full_name || github.repository }}
+          ref: ${{ env.PR_HEAD_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git author (for commits the agent may create)
+        run: |
+          git config user.name "OpenHands Agent"
+          git config user.email "openhands@all-hands.dev"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install OpenHands SDK
+        run: |
+          uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/agent-sdk.git@main#subdirectory=openhands-sdk"
+          uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/agent-sdk.git@main#subdirectory=openhands-tools"
+
+      - name: Write agent script
+        run: |
+          cat <<'PY' > /tmp/openhands_autofix.py
+          import os
+          import sys
+          from pathlib import Path
+          from openhands.sdk import LLM, Conversation, get_logger
+          from openhands.sdk.conversation import get_agent_final_response
+          from openhands.sdk.utils.github import sanitize_openhands_mentions
+          from openhands.sdk.context.agent_context import AgentContext
+          from openhands.sdk.context.skills import load_skills_from_dir
+          from openhands.tools.preset.default import get_default_agent
+
+          logger = get_logger(__name__)
+
+          def _load_repo_skills(repo_root: Path) -> list:
+              """Load repo skills from .openhands/skills and legacy .openhands/microagents."""
+              skills: list = []
+              for rel in [".openhands/skills", ".openhands/microagents"]:
+                  skill_dir = repo_root / rel
+                  if skill_dir.is_dir():
+                      repo_skills, knowledge_skills = load_skills_from_dir(skill_dir)
+                      skills.extend(repo_skills.values())
+                      skills.extend(knowledge_skills.values())
+              return skills
+
+
+          def main():
+              required = ["LLM_API_KEY", "PR_NUMBER", "PR_HEAD_BRANCH", "PR_BASE_BRANCH", "REPO_NAME"]
+              missing = [k for k in required if not os.getenv(k)]
+              if missing:
+                  logger.error(f"Missing required env vars: {missing}")
+                  sys.exit(1)
+
+              prompt = f"""
+              You are fixing CI failures on PR #{os.getenv("PR_NUMBER")} in {os.getenv("REPO_NAME")}.
+              The PR title is: {os.getenv("PR_TITLE", "(no title)")}.
+
+              Goals:
+              1) Reproduce the failing checks locally (run the same tests/build the CI runs).
+              2) Fix the failures. Prioritize dependency bumps and test fixes.
+              3) Commit changes to the current branch (already checked out) and push if needed.
+              4) Leave a concise summary of what you changed.
+
+              Notes:
+              - Branch checked out: {os.getenv("PR_HEAD_BRANCH")}
+              - Base branch: {os.getenv("PR_BASE_BRANCH")}
+              - If tests already pass locally, state that and exit.
+              - Do not force-push; use the existing branch and push normally.
+              """
+
+              llm_model = os.getenv("LLM_MODEL")
+              llm_base_url = os.getenv("LLM_BASE_URL")
+              missing = [name for name, val in {"LLM_MODEL": llm_model, "LLM_BASE_URL": llm_base_url}.items() if not val]
+              if missing:
+                  logger.error(f"Missing required env vars: {missing}")
+                  sys.exit(1)
+
+              llm = LLM(
+                  model=llm_model,
+                  api_key=os.getenv("LLM_API_KEY"),
+                  base_url=llm_base_url,
+                  usage_id="ci_autofix_agent",
+                  drop_params=True,
+              )
+
+              repo_root = Path.cwd()
+              skills = _load_repo_skills(repo_root)
+              if skills:
+                  logger.info(f"Loaded {len(skills)} repo skills for context")
+                  agent_context = AgentContext(skills=skills)
+              else:
+                  agent_context = None
+
+              agent = get_default_agent(llm=llm, cli_mode=True, agent_context=agent_context)
+              convo = Conversation(agent=agent, workspace=os.getcwd())
+              convo.send_message(prompt.strip())
+              convo.run()
+
+              final = get_agent_final_response(convo.state.events)
+              if final:
+                  final = sanitize_openhands_mentions(final)
+                  print("\n=== Agent Summary ===\n")
+                  print(final)
+              else:
+                  logger.warning("No final response from agent.")
+
+          if __name__ == "__main__":
+              main()
+          PY
+
+      - name: Run OpenHands agent
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ env.LLM_MODEL }}
+          LLM_BASE_URL: ${{ env.LLM_BASE_URL }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          PR_TITLE: ${{ env.PR_TITLE }}
+          PR_HEAD_BRANCH: ${{ env.PR_HEAD_BRANCH }}
+          PR_BASE_BRANCH: ${{ env.PR_BASE_BRANCH }}
+          REPO_NAME: ${{ env.REPO_NAME }}
+        run: |
+          if [[ -z "$LLM_API_KEY" ]]; then
+            echo "LLM_API_KEY secret is required." >&2
+            exit 1
+          fi
+          uv run python /tmp/openhands_autofix.py
+
+      - name: Push changes (if any)
+        run: |
+          if git diff --quiet; then
+            echo "No changes to push."
+            exit 0
+          fi
+          git status --short
+          git add -A
+          git commit -m "chore: auto-fix failing CI with OpenHands" || true
+          git push origin HEAD
+
+      - name: Upload agent logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openhands-autofix-logs
+          path: |
+            *.log
+            output/
+          retention-days: 7
