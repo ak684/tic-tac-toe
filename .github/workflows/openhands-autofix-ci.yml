@@ -1,13 +1,13 @@
 name: OpenHands Auto-Fix CI Failures
 
 on:
-  # Fire when a workflow run on a PR finishes and fails. Update the list below to
-  # match your primary CI workflow names.
+  # Fire when a workflow run on a PR finishes and fails.
+  # Add any workflow names you want auto-fix to monitor:
   workflow_run:
     workflows:
       - CI
-      - Test
-      - Build and Test
+      # - Test
+      # - Build and Test
     types:
       - completed
   # Allow manual runs for testing or ad-hoc fixes.
