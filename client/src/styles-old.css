@@ -1,0 +1,412 @@
+/* CSS Variables for consistent theming */
+:root {
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --success-color: #10b981;
+  --error-color: #ef4444;
+  --bg-dark: #0f0f23;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.5);
+  --shadow-card: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg-dark);
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(245, 87, 108, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+  color: var(--text-primary);
+  overflow-x: hidden;
+}
+
+.game {
+  text-align: center;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  grid-template-rows: repeat(3, 100px);
+  gap: 5px;
+  margin: 20px auto;
+  justify-self: center;
+  width: fit-content;
+}
+
+.square {
+  width: 100px;
+  height: 100px;
+  background-color: white;
+  border: 2px solid #333;
+  font-size: 48px;
+  font-weight: bold;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.square:disabled {
+  cursor: not-allowed;
+}
+
+.status {
+  margin-bottom: 20px;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.status.error {
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ffcdd2;
+}
+
+.reset-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.reset-button:hover {
+  background-color: #45a049;
+}
+
+.game-mode-selector {
+  margin-bottom: 20px;
+}
+
+.game-mode-selector h3 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.mode-options {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 5px;
+  transition: background-color 0.2s;
+}
+
+.mode-option:hover {
+  background-color: #f0f0f0;
+}
+
+.mode-option input[type="radio"] {
+  cursor: pointer;
+}
+
+/* Online Multiplayer Styles */
+.room-setup {
+  margin: 20px 0;
+  padding: 20px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  background-color: #f9f9f9;
+}
+
+.room-setup h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+}
+
+.player-name-input {
+  margin-bottom: 20px;
+}
+
+.player-name-input label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.player-name-input input {
+  width: 100%;
+  max-width: 300px;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+.room-options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.create-room-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.create-room-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.create-room-form input {
+  width: 100%;
+  max-width: 300px;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+.create-room-form button {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.create-room-form button:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.create-room-form button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.or-divider {
+  font-size: 16px;
+  color: #666;
+  margin: 10px 0;
+}
+
+.join-room-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.join-room-button:hover:not(:disabled) {
+  background-color: #1976D2;
+}
+
+.join-room-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.join-room-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.join-room-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.join-room-form input {
+  width: 100%;
+  max-width: 300px;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+  text-transform: uppercase;
+  margin-bottom: 15px;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.form-buttons button {
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.form-buttons button[type="submit"] {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.form-buttons button[type="submit"]:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.form-buttons button[type="button"] {
+  background-color: #f44336;
+  color: white;
+}
+
+.form-buttons button[type="button"]:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+.form-buttons button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+/* Room Info Styles */
+.room-info {
+  margin: 20px 0;
+  padding: 20px;
+  border: 2px solid #4CAF50;
+  border-radius: 10px;
+  background-color: #f1f8e9;
+}
+
+.room-details h3 {
+  margin: 0 0 10px 0;
+  color: #2e7d32;
+}
+
+.room-code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.room-code strong {
+  font-family: 'Courier New', monospace;
+  background-color: #e8f5e8;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #c8e6c9;
+}
+
+.copy-button {
+  padding: 4px 8px;
+  font-size: 12px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.copy-button:hover {
+  background-color: #1976D2;
+}
+
+.players-info h4 {
+  margin: 0 0 10px 0;
+  color: #2e7d32;
+}
+
+.players-info ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 15px 0;
+}
+
+.players-info li {
+  padding: 5px 10px;
+  margin: 5px 0;
+  background-color: #e8f5e8;
+  border-radius: 5px;
+  border: 1px solid #c8e6c9;
+}
+
+.players-info li.current-player {
+  background-color: #c8e6c9;
+  font-weight: bold;
+}
+
+.waiting-message {
+  font-style: italic;
+  color: #666;
+  margin: 10px 0;
+}
+
+.leave-room-button {
+  padding: 8px 16px;
+  font-size: 14px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.leave-room-button:hover {
+  background-color: #d32f2f;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .room-setup, .room-info {
+    margin: 10px 0;
+    padding: 15px;
+  }
+  
+  .player-name-input input,
+  .create-room-form input,
+  .join-room-form input {
+    max-width: 100%;
+  }
+  
+  .form-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .form-buttons button {
+    width: 100%;
+  }
+}
