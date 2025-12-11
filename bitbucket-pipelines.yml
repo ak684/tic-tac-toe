@@ -28,10 +28,6 @@ definitions:
         caches:
           - pip
         script:
-          # DEBUG: Commenting out tmux to investigate SubprocessTerminal failure
-          # - apt-get update && apt-get install -y tmux
-
-          # DEBUG: Investigate bash environment before OpenHands SDK runs
           - echo "=== DEBUG: Bash Environment Investigation ==="
           - echo "Bash version:"
           - bash --version
