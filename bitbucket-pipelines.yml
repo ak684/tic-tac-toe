@@ -28,6 +28,10 @@ definitions:
         caches:
           - pip
         script:
+          # Install tmux for OpenHands SDK terminal support
+          # (SubprocessTerminal fails in minimal containers; TmuxTerminal is more robust)
+          - apt-get update && apt-get install -y tmux
+
           # Install uv for fast package management
           - pip install uv
 
