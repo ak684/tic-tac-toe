@@ -18,6 +18,7 @@ Environment Variables:
 
 import json
 import os
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -377,6 +378,7 @@ def main():
                 save_basic_report(repo_root, scan_results)
         except Exception as e:
             logger.error(f"Agent failed, falling back to basic report: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             save_basic_report(repo_root, scan_results)
     else:
         logger.warning("LLM_API_KEY not set, generating basic report only")
