@@ -28,31 +28,19 @@ definitions:
         caches:
           - pip
         script:
-          - echo "=== DEBUG: Bash Environment Investigation ==="
-          - echo "Bash version:"
-          - bash --version
-          - echo ""
-          - echo "Current shell:"
-          - echo $SHELL
-          - echo ""
-          - echo "PS1 value:"
-          - echo "$PS1"
-          - echo ""
-          - echo "PROMPT_COMMAND value:"
-          - echo "$PROMPT_COMMAND"
-          - echo ""
-          - echo "TERM value:"
-          - echo $TERM
-          - echo ""
-          - echo "TTY info:"
-          - tty || echo "No TTY available"
-          - echo ""
-          - echo "Interactive shell test:"
-          - echo $-
-          - echo ""
-          - echo "=== END DEBUG ==="
+          - |
+            echo "=== DEBUG: Bash Environment Investigation ==="
+            echo "Bash version:"
+            bash --version
+            echo "Current shell: $SHELL"
+            echo "PS1 value: $PS1"
+            echo "PROMPT_COMMAND value: $PROMPT_COMMAND"
+            echo "TERM value: $TERM"
+            echo "TTY info:"
+            tty || echo "No TTY available"
+            echo "Interactive shell flags: $-"
+            echo "=== END DEBUG ==="
 
-          # Install uv for fast package management
           - pip install uv
 
           # Install OpenHands SDK
