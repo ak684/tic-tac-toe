@@ -28,9 +28,33 @@ definitions:
         caches:
           - pip
         script:
-          # Install tmux for OpenHands SDK terminal support
-          # (SubprocessTerminal fails in minimal containers; TmuxTerminal is more robust)
-          - apt-get update && apt-get install -y tmux
+          # DEBUG: Commenting out tmux to investigate SubprocessTerminal failure
+          # - apt-get update && apt-get install -y tmux
+
+          # DEBUG: Investigate bash environment before OpenHands SDK runs
+          - echo "=== DEBUG: Bash Environment Investigation ==="
+          - echo "Bash version:"
+          - bash --version
+          - echo ""
+          - echo "Current shell:"
+          - echo $SHELL
+          - echo ""
+          - echo "PS1 value:"
+          - echo "$PS1"
+          - echo ""
+          - echo "PROMPT_COMMAND value:"
+          - echo "$PROMPT_COMMAND"
+          - echo ""
+          - echo "TERM value:"
+          - echo $TERM
+          - echo ""
+          - echo "TTY info:"
+          - tty || echo "No TTY available"
+          - echo ""
+          - echo "Interactive shell test:"
+          - echo $-
+          - echo ""
+          - echo "=== END DEBUG ==="
 
           # Install uv for fast package management
           - pip install uv
