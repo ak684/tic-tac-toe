@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-SBOM (Software Bill of Materials) Report Generator
+SBOM (Software Bill of Materials) Report Generator with CVE Scanning
 
 Generates a comprehensive SBOM for the repository and uses AI to analyze
 security implications, outdated dependencies, and license compliance.
+Now includes CVE scanning via grype to ground security analysis in real data.
 
 Environment Variables:
     LLM_API_KEY: API key for the LLM (required for detailed analysis)
@@ -45,6 +46,124 @@ def install_syft() -> bool:
     except Exception as e:
         logger.error(f"Error installing syft: {e}")
         return False
+
+
+def install_grype() -> bool:
+    """Install grype CVE scanner if not present."""
+    result = subprocess.run(["which", "grype"], capture_output=True)
+    if result.returncode == 0:
+        logger.info("grype is already installed")
+        return True
+
+    logger.info("Installing grype...")
+    try:
+        install_cmd = "curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin"
+        result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"Failed to install grype: {result.stderr}")
+            return False
+        logger.info("grype installed successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Error installing grype: {e}")
+        return False
+
+
+def run_cve_scan(repo_root: Path) -> dict | None:
+    """Run grype CVE scan and return parsed JSON results."""
+    scan_path = repo_root / "reports" / "cve-raw.json"
+    scan_path.parent.mkdir(exist_ok=True)
+
+    logger.info("Scanning for CVEs with grype...")
+    try:
+        result = subprocess.run(
+            ["grype", f"dir:{repo_root}", "-o", "json", "--file", str(scan_path)],
+            capture_output=True,
+            text=True,
+            timeout=600,  # 10 minute timeout
+        )
+        # grype exits with 0 even when vulnerabilities found
+        if result.returncode != 0 and "no vulnerabilities found" not in result.stderr.lower():
+            logger.warning(f"grype returned non-zero: {result.stderr}")
+
+        if not scan_path.exists():
+            logger.error("grype did not create output file")
+            return None
+
+        with open(scan_path) as f:
+            scan_data = json.load(f)
+
+        matches = scan_data.get("matches", [])
+        logger.info(f"CVE scan complete: {len(matches)} vulnerabilities found")
+        return scan_data
+
+    except subprocess.TimeoutExpired:
+        logger.error("grype timed out after 10 minutes")
+        return None
+    except Exception as e:
+        logger.error(f"Error running grype scan: {e}")
+        return None
+
+
+def summarize_cves(scan_data: dict) -> dict:
+    """Extract summary statistics from grype scan results."""
+    matches = scan_data.get("matches", [])
+
+    by_severity = {"Critical": [], "High": [], "Medium": [], "Low": [], "Negligible": [], "Unknown": []}
+    by_package = {}
+
+    for match in matches:
+        vuln = match.get("vulnerability", {})
+        artifact = match.get("artifact", {})
+
+        severity = vuln.get("severity", "Unknown")
+        cve_id = vuln.get("id", "Unknown")
+        pkg_name = artifact.get("name", "unknown")
+        pkg_version = artifact.get("version", "unknown")
+        pkg_type = artifact.get("type", "unknown")
+        fix_versions = vuln.get("fix", {}).get("versions", [])
+
+        cve_info = {
+            "id": cve_id,
+            "severity": severity,
+            "package": pkg_name,
+            "version": pkg_version,
+            "type": pkg_type,
+            "fix_versions": fix_versions,
+            "description": vuln.get("description", ""),
+        }
+
+        by_severity.get(severity, by_severity["Unknown"]).append(cve_info)
+
+        pkg_key = f"{pkg_name}@{pkg_version}"
+        if pkg_key not in by_package:
+            by_package[pkg_key] = {
+                "name": pkg_name,
+                "version": pkg_version,
+                "type": pkg_type,
+                "cves": [],
+                "max_severity": "Unknown",
+                "fix_versions": set(),
+            }
+        by_package[pkg_key]["cves"].append(cve_info)
+        by_package[pkg_key]["fix_versions"].update(fix_versions)
+
+        # Track max severity for package
+        severity_order = ["Critical", "High", "Medium", "Low", "Negligible", "Unknown"]
+        current_max = by_package[pkg_key]["max_severity"]
+        if severity_order.index(severity) < severity_order.index(current_max):
+            by_package[pkg_key]["max_severity"] = severity
+
+    # Convert fix_versions sets to lists for JSON serialization
+    for pkg_key in by_package:
+        by_package[pkg_key]["fix_versions"] = list(by_package[pkg_key]["fix_versions"])
+
+    return {
+        "total_cves": len(matches),
+        "by_severity": {k: len(v) for k, v in by_severity.items()},
+        "by_severity_details": by_severity,
+        "by_package": by_package,
+    }
 
 
 def generate_sbom(repo_root: Path) -> dict | None:
@@ -114,13 +233,18 @@ def summarize_sbom(sbom_data: dict) -> dict:
     }
 
 
-def generate_basic_report(repo_root: Path, summary: dict) -> str:
+def generate_basic_report(repo_root: Path, summary: dict, cve_summary: dict | None = None) -> str:
     """Generate a basic SBOM report without LLM analysis."""
+    cve_total = cve_summary["total_cves"] if cve_summary else 0
+    cve_critical = cve_summary["by_severity"].get("Critical", 0) if cve_summary else 0
+    cve_high = cve_summary["by_severity"].get("High", 0) if cve_summary else 0
+
     report = f"""# SBOM Report
 
 **Repository:** {repo_root.name}
 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
 **Total Packages:** {summary['total_packages']}
+**Total CVEs:** {cve_total} (Critical: {cve_critical}, High: {cve_high})
 
 ---
 
@@ -131,6 +255,39 @@ def generate_basic_report(repo_root: Path, summary: dict) -> str:
 """
     for pkg_type, count in sorted(summary["by_type"].items(), key=lambda x: -x[1]):
         report += f"| {pkg_type} | {count} |\n"
+
+    # Add CVE section if we have CVE data
+    if cve_summary and cve_summary["total_cves"] > 0:
+        report += """
+---
+
+## CVE Summary
+
+| Severity | Count |
+|----------|-------|
+"""
+        for severity in ["Critical", "High", "Medium", "Low", "Negligible"]:
+            count = cve_summary["by_severity"].get(severity, 0)
+            if count > 0:
+                report += f"| {severity} | {count} |\n"
+
+        # Show critical/high CVEs
+        critical_high = (
+            cve_summary["by_severity_details"]["Critical"] +
+            cve_summary["by_severity_details"]["High"]
+        )
+        if critical_high:
+            report += """
+### Critical & High Severity Vulnerabilities
+
+| CVE ID | Severity | Package | Version | Fix Available |
+|--------|----------|---------|---------|---------------|
+"""
+            for cve in critical_high[:15]:
+                fix = ", ".join(cve["fix_versions"][:2]) if cve["fix_versions"] else "No fix"
+                report += f"| {cve['id']} | {cve['severity']} | {cve['package']} | {cve['version']} | {fix} |\n"
+            if len(critical_high) > 15:
+                report += f"\n*... and {len(critical_high) - 15} more critical/high vulnerabilities*\n"
 
     report += """
 ---
@@ -169,8 +326,8 @@ def generate_basic_report(repo_root: Path, summary: dict) -> str:
     return report
 
 
-def generate_report_with_agent(repo_root: Path, summary: dict) -> str:
-    """Use OpenHands agent to analyze SBOM and generate detailed report."""
+def generate_report_with_agent(repo_root: Path, summary: dict, cve_summary: dict | None = None) -> str:
+    """Use OpenHands agent to analyze SBOM and CVE data, generate detailed report."""
     api_key = os.getenv("LLM_API_KEY")
     if not api_key:
         logger.error("LLM_API_KEY not set, generating basic report only")
@@ -196,6 +353,57 @@ def generate_report_with_agent(repo_root: Path, summary: dict) -> str:
     top_packages = summary["packages"][:100]
     packages_json = json.dumps(top_packages, indent=2)
 
+    # Prepare CVE data if available
+    cve_section = ""
+    cve_report_section = ""
+    if cve_summary:
+        critical_high = (
+            cve_summary["by_severity_details"]["Critical"] +
+            cve_summary["by_severity_details"]["High"]
+        )[:20]
+        cve_section = f"""
+CVE SCAN RESULTS (from grype):
+- Total Vulnerabilities: {cve_summary['total_cves']}
+- Critical: {cve_summary['by_severity'].get('Critical', 0)}
+- High: {cve_summary['by_severity'].get('High', 0)}
+- Medium: {cve_summary['by_severity'].get('Medium', 0)}
+- Low: {cve_summary['by_severity'].get('Low', 0)}
+
+TOP CRITICAL/HIGH CVEs:
+{json.dumps(critical_high, indent=2)}
+
+VULNERABLE PACKAGES:
+{json.dumps(list(cve_summary['by_package'].values())[:15], indent=2, default=str)}
+
+RAW CVE FILE: reports/cve-raw.json (full grype scan results)
+"""
+        cve_report_section = f"""
+## Security Vulnerabilities (CVE Scan)
+
+| Severity | Count |
+|----------|-------|
+| Critical | {cve_summary['by_severity'].get('Critical', 0)} |
+| High | {cve_summary['by_severity'].get('High', 0)} |
+| Medium | {cve_summary['by_severity'].get('Medium', 0)} |
+| Low | {cve_summary['by_severity'].get('Low', 0)} |
+
+### Critical/High Vulnerabilities Requiring Immediate Action
+
+| CVE ID | Package | Current Version | Fix Version | Severity |
+|--------|---------|-----------------|-------------|----------|
+[Fill from CVE data above - prioritize those WITH available fixes]
+
+### Vulnerabilities Without Available Fixes
+[List any critical/high CVEs that have no fix available yet - these need monitoring]
+"""
+    else:
+        cve_section = "\nNOTE: CVE scan was not run or failed. Security observations will be based on package analysis only.\n"
+        cve_report_section = """
+## Security Observations
+[3-5 bullet points about potential security concerns based on package analysis]
+NOTE: CVE scanning was not available. Run with grype for actual vulnerability data.
+"""
+
     prompt = f"""Generate a CONCISE SBOM security and compliance report for this repository.
 
 IMPORTANT: You are running in a CI environment where terminal commands may timeout.
@@ -210,21 +418,24 @@ TOP PACKAGES (first 100):
 {packages_json}
 
 RAW SBOM FILE: reports/sbom-raw.json (full details available there)
+{cve_section}
 
 ANALYSIS STEPS:
-1. Review the package list for known problematic packages or very outdated versions
+1. Review CVE scan results - prioritize Critical/High vulnerabilities with available fixes
 2. Check license distribution for copyleft (GPL, AGPL) vs permissive (MIT, Apache, BSD) licenses
 3. Identify any license compliance concerns for commercial use
-4. Note any packages that commonly have security issues
+4. Correlate SBOM packages with CVE data to identify which dependencies are most risky
 
 REPORT FORMAT - Save to: reports/sbom-{datetime.now().strftime('%Y-%m-%d')}.md
 
 # SBOM Report — {repo_root.name} ({datetime.now().strftime('%Y-%m-%d')})
 
 **Total Dependencies:** {summary['total_packages']}
+**Total CVEs:** {cve_summary['total_cves'] if cve_summary else 'N/A'} (Critical: {cve_summary['by_severity'].get('Critical', 0) if cve_summary else 'N/A'}, High: {cve_summary['by_severity'].get('High', 0) if cve_summary else 'N/A'})
 
 ## Executive Summary
-[2-3 sentences: Overall health of dependencies, any critical concerns]
+[2-3 sentences: Overall security posture based on ACTUAL CVE data, not speculation]
+{cve_report_section}
 
 ## Dependency Overview
 
@@ -243,14 +454,11 @@ REPORT FORMAT - Save to: reports/sbom-{datetime.now().strftime('%Y-%m-%d')}.md
 | High Risk | GPL, AGPL | [count] | [brief impact] |
 | Unknown | [list] | [count] | Requires review |
 
-## Security Observations
-[3-5 bullet points about potential security concerns based on package analysis]
-
 ## Recommendations
 
-### 1. [Top Priority Action]
-**Why:** [1 sentence]
-**Action:** [What to do]
+### 1. [Top Priority - Usually a Critical CVE fix]
+**Why:** [1 sentence referencing specific CVE if applicable]
+**Action:** [Specific version to upgrade to]
 
 ### 2. [Second Priority]
 **Why:** [1 sentence]
@@ -264,9 +472,9 @@ REPORT FORMAT - Save to: reports/sbom-{datetime.now().strftime('%Y-%m-%d')}.md
 
 IMPORTANT CONSTRAINTS:
 - Keep report under 100 lines
-- Focus on actionable insights, not exhaustive lists
-- Highlight actual risks, not theoretical ones
-- The raw SBOM JSON is available in reports/sbom-raw.json for full details
+- Base security recommendations on ACTUAL CVE data, not speculation
+- Focus on actionable fixes - packages with available fix versions
+- The raw SBOM JSON is in reports/sbom-raw.json, CVE data in reports/cve-raw.json
 """
 
     conversation.send_message(prompt)
@@ -299,6 +507,20 @@ def main():
     summary = summarize_sbom(sbom_data)
     logger.info(f"SBOM summary: {summary['total_packages']} packages across {len(summary['by_type'])} types")
 
+    # Run CVE scan with grype for real vulnerability data
+    cve_summary = None
+    if install_grype():
+        cve_data = run_cve_scan(repo_root)
+        if cve_data:
+            cve_summary = summarize_cves(cve_data)
+            logger.info(f"CVE scan: {cve_summary['total_cves']} vulnerabilities found")
+            logger.info(f"  Critical: {cve_summary['by_severity'].get('Critical', 0)}")
+            logger.info(f"  High: {cve_summary['by_severity'].get('High', 0)}")
+        else:
+            logger.warning("CVE scan failed, continuing without vulnerability data")
+    else:
+        logger.warning("Could not install grype, continuing without CVE scan")
+
     # Generate report
     report_path = reports_dir / f"sbom-{datetime.now().strftime('%Y-%m-%d')}.md"
     api_key = os.getenv("LLM_API_KEY")
@@ -306,26 +528,30 @@ def main():
     if api_key:
         logger.info("Using OpenHands agent for detailed analysis...")
         try:
-            generate_report_with_agent(repo_root, summary)
+            generate_report_with_agent(repo_root, summary, cve_summary)
             # Verify agent created the report
             if not report_path.exists():
                 logger.warning("Agent didn't create report, falling back to basic")
-                report = generate_basic_report(repo_root, summary)
+                report = generate_basic_report(repo_root, summary, cve_summary)
                 report_path.write_text(report)
         except Exception as e:
             logger.error(f"Agent failed, falling back to basic report: {e}")
-            report = generate_basic_report(repo_root, summary)
+            report = generate_basic_report(repo_root, summary, cve_summary)
             report_path.write_text(report)
     else:
         logger.warning("LLM_API_KEY not set, generating basic report only")
-        report = generate_basic_report(repo_root, summary)
+        report = generate_basic_report(repo_root, summary, cve_summary)
         report_path.write_text(report)
 
     # Print summary
-    print(f"\n{'='*50}")
-    print(f"SBOM GENERATED: {summary['total_packages']} packages")
+    cve_info = ""
+    if cve_summary:
+        cve_info = f"\nCVEs found: {cve_summary['total_cves']} (Critical: {cve_summary['by_severity'].get('Critical', 0)}, High: {cve_summary['by_severity'].get('High', 0)})"
+
+    print(f"\n{'='*60}")
+    print(f"SBOM GENERATED: {summary['total_packages']} packages{cve_info}")
     print(f"Report saved to: {report_path}")
-    print(f"{'='*50}\n")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":
