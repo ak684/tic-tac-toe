@@ -45,9 +45,9 @@ definitions:
 
           - pip install uv
 
-          # Install OpenHands SDK (using fix branch for PTY init delay)
-          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/subprocess-terminal-init-delay#subdirectory=openhands-sdk"
-          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/subprocess-terminal-init-delay#subdirectory=openhands-tools"
+          # Install OpenHands SDK (using pipe-based terminal for CI)
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-tools"
 
           # Validate required variables
           - |
@@ -84,9 +84,9 @@ definitions:
         script:
           - pip install uv
 
-          # Install OpenHands SDK (using fix branch for PTY init delay)
-          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/subprocess-terminal-init-delay#subdirectory=openhands-sdk"
-          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/subprocess-terminal-init-delay#subdirectory=openhands-tools"
+          # Install OpenHands SDK (using pipe-based terminal for CI)
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-tools"
 
           # Install curl for syft installation
           - apt-get update && apt-get install -y curl
