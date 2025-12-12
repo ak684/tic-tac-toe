@@ -10,9 +10,9 @@
 # SETUP:
 #   1. Add repository variables in Bitbucket:
 #      Settings → Repository variables
-#      - OPENHANDS_LLM_API_KEY (secured): Your LLM provider API key
-#      - OPENHANDS_LLM_MODEL: e.g., "anthropic/claude-sonnet-4-5-20250929"
-#      - OPENHANDS_LLM_BASE_URL: e.g., "https://api.anthropic.com/v1" (optional)
+#      - LLM_API_KEY (secured): Your LLM provider API key
+#      - LLM_MODEL: e.g., "anthropic/claude-sonnet-4-5-20250929"
+#      - LLM_BASE_URL: e.g., "https://api.anthropic.com/v1" (optional)
 #
 #   2. For PR creation (recommended):
 #      - OPENHANDS_BB_USERNAME: Your Bitbucket username
@@ -44,15 +44,10 @@ definitions:
           - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-sdk"
           - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-tools"
 
-          # Map OPENHANDS_ variables to what the scripts expect
-          - export LLM_API_KEY="$OPENHANDS_LLM_API_KEY"
-          - export LLM_MODEL="${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
-          - export LLM_BASE_URL="$OPENHANDS_LLM_BASE_URL"
-
           # Validate required variables
           - |
-            if [ -z "$OPENHANDS_LLM_API_KEY" ]; then
-              echo "Error: OPENHANDS_LLM_API_KEY repository variable is not set."
+            if [ -z "$LLM_API_KEY" ]; then
+              echo "Error: LLM_API_KEY repository variable is not set."
               echo "Go to Repository Settings → Repository variables to add it."
               exit 1
             fi
@@ -116,15 +111,10 @@ definitions:
           # Install curl for syft installation
           - apt-get update && apt-get install -y curl
 
-          # Map OPENHANDS_ variables to what the scripts expect
-          - export LLM_API_KEY="$OPENHANDS_LLM_API_KEY"
-          - export LLM_MODEL="${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
-          - export LLM_BASE_URL="$OPENHANDS_LLM_BASE_URL"
-
           # Validate required variables
           - |
-            if [ -z "$OPENHANDS_LLM_API_KEY" ]; then
-              echo "Error: OPENHANDS_LLM_API_KEY repository variable is not set."
+            if [ -z "$LLM_API_KEY" ]; then
+              echo "Error: LLM_API_KEY repository variable is not set."
               echo "Go to Repository Settings → Repository variables to add it."
               exit 1
             fi
@@ -188,15 +178,10 @@ definitions:
           # Install curl for grype installation and Node.js for npm
           - apt-get update && apt-get install -y curl nodejs npm
 
-          # Map OPENHANDS_ variables to what the scripts expect
-          - export LLM_API_KEY="$OPENHANDS_LLM_API_KEY"
-          - export LLM_MODEL="${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
-          - export LLM_BASE_URL="$OPENHANDS_LLM_BASE_URL"
-
           # Validate required variables
           - |
-            if [ -z "$OPENHANDS_LLM_API_KEY" ]; then
-              echo "Error: OPENHANDS_LLM_API_KEY repository variable is not set."
+            if [ -z "$LLM_API_KEY" ]; then
+              echo "Error: LLM_API_KEY repository variable is not set."
               echo "Go to Repository Settings → Repository variables to add it."
               exit 1
             fi
