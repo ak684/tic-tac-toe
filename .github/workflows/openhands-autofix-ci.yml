@@ -159,7 +159,7 @@ jobs:
       - name: Configure git author
         run: |
           git config user.name "OpenHands Agent"
-          git config user.email "openhands@all-hands.dev"
+          git config user.email "openhands@openhands.dev"
 
       # -----------------------------------------------------------------------
       # STEP 4: Post a comment on the PR so users know auto-fix is running
