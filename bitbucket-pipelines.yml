@@ -60,7 +60,7 @@ definitions:
             if [ -n "$(git status --porcelain)" ]; then
               git add reports/
               git commit -m "chore: update AI readiness report"
-              git push origin HEAD
+              git pull --rebase origin main && git push origin HEAD
             else
               echo "No changes to commit"
             fi
@@ -102,7 +102,7 @@ definitions:
             if [ -n "$(git status --porcelain)" ]; then
               git add reports/
               git commit -m "chore: update SBOM report"
-              git push origin HEAD
+              git pull --rebase origin main && git push origin HEAD
             else
               echo "No changes to commit"
             fi
@@ -147,7 +147,7 @@ definitions:
 
             Automated security fixes applied by OpenHands CVE scanner.
             See reports/cve-*.md for details."
-              git push origin HEAD
+              git pull --rebase origin main && git push origin HEAD
             else
               echo "No CVE fixes needed"
             fi
