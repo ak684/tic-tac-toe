@@ -43,9 +43,9 @@ definitions:
 
           - pip install uv
 
-          # Install OpenHands SDK (using fix branch to test bracketed paste fix)
-          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/agent-sdk.git@fix/disable-bracketed-paste-mode#subdirectory=openhands-sdk"
-          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/agent-sdk.git@fix/disable-bracketed-paste-mode#subdirectory=openhands-tools"
+          # Install OpenHands SDK (using fix branch for PTY init delay)
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/subprocess-terminal-init-delay#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/subprocess-terminal-init-delay#subdirectory=openhands-tools"
 
           # Validate required variables
           - |
