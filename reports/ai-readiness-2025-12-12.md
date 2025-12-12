@@ -1,69 +1,36 @@
-# AI-Readiness Report — oh-tic-tac-toe (2025-12-12)
+# AI-Readiness Report — tic-tac-toe (2025-12-12)
 
 **Score: 26%** (26/100 points)
 
 ## Summary
-This full-stack Tic Tac Toe game (React + Express + Socket.IO) has basic documentation and repository structure guide, enabling agents to understand the codebase quickly. However, agents cannot verify their changes work correctly (no test infrastructure) and must manually execute repetitive tasks (no automation scripts), creating high regression risk.
+This full-stack Tic Tac Toe game (React + Express + Socket.IO + SQLite) provides basic documentation and repository structure guide for AI agents to understand the codebase. However, agents operate without validation capabilities (no tests) and lack automation tools, creating 70%+ regression risk when making changes.
 
 ## Findings
 
 | Category | Status | AI Agent Impact |
 |----------|--------|-----------------|
-| Documentation (10 pts) | 6/10 - Partial | README covers setup and deployment basics, but lacks architecture diagrams, troubleshooting guides, and detailed API documentation needed for complex debugging. |
-| Agent Guidelines (30 pts) | 15/30 - Partial | Has `.openhands/microagents/repo.md` with structure and tech stack, but missing AGENTS.md with common gotchas, debugging workflows, and coding conventions. |
-| Agent Automation (30 pts) | 5/30 - Minimal | Only basic npm scripts exist; no `.openhands/skills/` directory with reusable automation for common development/testing/deployment tasks. |
-| Test Infrastructure (30 pts) | 0/30 - Missing | Zero test coverage - both client and server have stub test scripts that exit with errors; agents operate "blind" without ability to validate changes. |
+| Documentation (10 pts) | 6/10 Partial | README covers setup/deployment basics but lacks troubleshooting guides and detailed API documentation. |
+| Agent Guidelines (30 pts) | 15/30 Partial | Has `.openhands/microagents/repo.md` with structure/tech stack; missing AGENTS.md with gotchas and conventions. |
+| Agent Automation (30 pts) | 5/30 Minimal | Only basic npm scripts exist; no `.openhands/skills/` directory for reusable automation tasks. |
+| Test Infrastructure (30 pts) | 0/30 Missing | Zero test coverage - agents cannot verify changes work correctly before committing. |
 
 ## Top 3 Actions
 
-### 1. Create Comprehensive Test Infrastructure
+### 1. Create Test Infrastructure
 **Category:** Test Infrastructure (30 pts)
-**Why:** Agents currently have no way to verify changes work correctly. Tests enable agents to catch bugs before committing, prevent regressions, and gain confidence in modifications. This is the single highest-impact improvement.
-**What to create:** 
-- Install Jest, React Testing Library, and Supertest
-- Create `server/__tests__/` with tests for game logic, API endpoints (/api/ai-move, /api/make-move), Socket.IO events
-- Create `client/src/__tests__/` with component tests and integration tests
-- Update package.json files with proper test scripts
-- Add `.openhands/skills/run_tests.sh` to execute full test suite
+**Why:** Agents have no way to verify changes work correctly, causing high regression risk and inability to validate fixes.
+**What to create:** Jest + React Testing Library + Supertest setup with `server/__tests__/` for API/game logic tests, `client/src/__tests__/` for component tests, and `.openhands/skills/run_tests.sh` automation script.
 
-### 2. Build Agent Automation Skills Library
+### 2. Build Agent Automation Skills
 **Category:** Agent Automation (30 pts)
-**Why:** Agents repeatedly execute the same multi-step workflows. Pre-built scripts reduce errors, save time, and ensure consistency in common operations like setup, validation, and deployment.
-**What to create:**
-- `.openhands/skills/setup_dev_env.sh` - Complete environment setup from scratch (check Node version, install all deps)
-- `.openhands/skills/validate_build.sh` - Verify client builds successfully and server starts without errors
-- `.openhands/skills/run_lint.sh` - ESLint checks for both client and server code
-- `.openhands/skills/clean_rebuild.sh` - Remove all node_modules and rebuild
-- `.openhands/skills/health_check.sh` - Test server health endpoint and database connectivity
+**Why:** Agents repeatedly execute multi-step workflows manually, causing errors and wasting time on repetitive tasks.
+**What to create:** `.openhands/skills/` directory with scripts for setup, build validation, linting, clean rebuild, and health checks.
 
-### 3. Create AGENTS.md with Gotchas and Best Practices
+### 3. Document Gotchas in AGENTS.md
 **Category:** Agent Guidelines (30 pts)
-**Why:** While repo.md covers structure, agents need project-specific gotchas, debugging techniques, and conventions to avoid repeated mistakes and generate consistent code.
-**What to create:**
-- `AGENTS.md` in repository root with sections:
-  - Common gotchas (must rebuild client after changes, Socket.IO room cleanup, SQLite file locking)
-  - Debugging guide (Socket.IO connection issues, CORS problems, database errors)
-  - Coding conventions (error handling patterns, React state management, Express middleware structure)
-  - Testing requirements (what needs tests, test naming conventions)
-  - Deployment checklist (build steps, environment variables, health check validation)
-
-## Quick Wins
-
-- Add ESLint and Prettier configuration files for code consistency
-- Create basic smoke test for `/api/health` endpoint to establish testing pattern
-- Add architecture diagram to README showing client-server-database-Socket.IO flow
-- Document API request/response examples in repo.md
-- Add troubleshooting section to README for common issues (port conflicts, build failures, Socket.IO CORS)
-
-## Impact Assessment
-
-**Current State:** Agents can understand and modify code but operate without validation, creating ~70% risk of introducing regressions in multi-step changes.
-
-**With Improvements:** 
-- 90% reduction in regression risk through automated testing
-- 3x faster common task execution through automation scripts
-- 50% fewer repeated mistakes through documented gotchas
+**Why:** Agents lack project-specific knowledge about common pitfalls, debugging workflows, and coding conventions.
+**What to create:** Root-level `AGENTS.md` with sections for common gotchas (client rebuild requirements, Socket.IO room cleanup, SQLite locking), debugging guides, coding conventions, and deployment checklists.
 
 ---
 
-*Generated: 2025-12-12 | Repo: oh-tic-tac-toe | Tech: React 19 + Express + Socket.IO + SQLite*
+*Generated: 2025-12-12 | Stack: React 19 + Express + Socket.IO + SQLite | Node: >=18.0.0*
