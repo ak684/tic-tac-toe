@@ -5,6 +5,7 @@
 #
 # 1. AI Readiness Report - Scores repository's AI-readiness
 # 2. SBOM Report - Generates Software Bill of Materials with security analysis
+# 3. CVE Scanner - Scans for CVEs, auto-applies fixes, and generates report
 #
 # SETUP:
 #   1. Add repository variables in Bitbucket:
@@ -13,11 +14,14 @@
 #      - LLM_MODEL: e.g., "anthropic/claude-sonnet-4-5-20250929"
 #      - LLM_BASE_URL: e.g., "https://api.anthropic.com/v1" (optional)
 #
-#   2. To schedule runs:
+#   2. Optional variables:
+#      - CVE_FAIL_ON_CRITICAL: "true" to fail build on critical CVEs
+#
+#   3. To schedule runs:
 #      Settings → Pipelines → Schedules → Add schedule
 #      - Branch: main
-#      - Pipeline: custom: ai-readiness-report OR custom: sbom-report
-#      - Schedule: Daily/Weekly at your preferred time
+#      - Pipeline: custom: cve-scanner (recommended weekly)
+#      - Schedule: Weekly at your preferred time
 #
 # =============================================================================
 
@@ -119,6 +123,51 @@ definitions:
           - reports/**
           - "*.log"
 
+    - step: &cve-scanner
+        name: CVE Scanner & Auto-Fix
+        caches:
+          - pip
+        script:
+          - pip install uv
+
+          # Install OpenHands SDK (using pipe-based terminal for CI)
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-tools"
+
+          # Install curl for grype installation and Node.js for npm
+          - apt-get update && apt-get install -y curl nodejs npm
+
+          # Validate required variables
+          - |
+            if [ -z "$LLM_API_KEY" ]; then
+              echo "Error: LLM_API_KEY repository variable is not set."
+              echo "Go to Repository Settings → Repository variables to add it."
+              exit 1
+            fi
+
+          # Run the CVE scanner - analyzes vulnerabilities, applies fixes, generates report
+          - python scripts/cve_report.py
+
+          # Configure git for commits
+          - git config user.name "OpenHands"
+          - git config user.email "openhands@all-hands.dev"
+
+          # Commit and push all changes (report + package fixes)
+          - |
+            if [ -n "$(git status --porcelain)" ]; then
+              git add -A
+              git commit -m "fix: apply CVE security patches
+
+              Automated security fixes applied by OpenHands CVE scanner.
+              See reports/cve-*.md for details."
+              git push origin HEAD
+            else
+              echo "No CVE fixes needed"
+            fi
+        artifacts:
+          - reports/**
+          - "*.log"
+
 pipelines:
   # Manual trigger or scheduled runs use these custom pipelines
   custom:
@@ -126,8 +175,11 @@ pipelines:
       - step: *ai-readiness-report
     sbom-report:
       - step: *sbom-report
+    cve-scanner:
+      - step: *cve-scanner
 
   # Optionally run on push to main (comment out if you only want scheduled runs)
   # branches:
   #   main:
   #     - step: *ai-readiness-report
+  #     - step: *cve-scanner  # Weekly CVE scan recommended
