@@ -14,14 +14,10 @@
 #      - LLM_MODEL: e.g., "anthropic/claude-sonnet-4-5-20250929"
 #      - LLM_BASE_URL: e.g., "https://api.anthropic.com/v1" (optional)
 #
-#   2. For PR creation (recommended):
-#      - OPENHANDS_BB_USERNAME: Your Bitbucket username
-#      - OPENHANDS_BB_APP_PASSWORD (secured): App password with repo + PR write
-#
-#   3. Optional variables:
+#   2. Optional variables:
 #      - CVE_FAIL_ON_CRITICAL: "true" to fail build on critical CVEs
 #
-#   4. To schedule runs:
+#   3. To schedule runs:
 #      Settings → Pipelines → Schedules → Add schedule
 #      - Branch: main
 #      - Pipeline: custom: cve-scanner (recommended weekly)
@@ -59,37 +55,12 @@ definitions:
           - git config user.name "OpenHands"
           - git config user.email "openhands@all-hands.dev"
 
-          # Create PR or push directly based on available credentials
+          # Commit and push the report if there are changes
           - |
             if [ -n "$(git status --porcelain)" ]; then
-              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-              BRANCH_NAME="openhands/ai-readiness-$TIMESTAMP"
-
               git add reports/
               git commit -m "chore: update AI readiness report"
-
-              if [ -n "$OPENHANDS_BB_USERNAME" ] && [ -n "$OPENHANDS_BB_APP_PASSWORD" ]; then
-                echo "Creating PR for changes..."
-                git checkout -b "$BRANCH_NAME"
-                git push origin "$BRANCH_NAME"
-
-                # Create PR via Bitbucket API
-                curl -s -X POST \
-                  -u "$OPENHANDS_BB_USERNAME:$OPENHANDS_BB_APP_PASSWORD" \
-                  "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG/pullrequests" \
-                  -H "Content-Type: application/json" \
-                  -d "{
-                    \"title\": \"chore: update AI readiness report\",
-                    \"source\": { \"branch\": { \"name\": \"$BRANCH_NAME\" } },
-                    \"destination\": { \"branch\": { \"name\": \"main\" } },
-                    \"close_source_branch\": true
-                  }"
-                echo ""
-                echo "PR created successfully!"
-              else
-                echo "No BB credentials, pushing directly to main..."
-                git push origin HEAD
-              fi
+              git push origin HEAD
             else
               echo "No changes to commit"
             fi
@@ -126,37 +97,12 @@ definitions:
           - git config user.name "OpenHands"
           - git config user.email "openhands@all-hands.dev"
 
-          # Create PR or push directly based on available credentials
+          # Commit and push the report if there are changes
           - |
             if [ -n "$(git status --porcelain)" ]; then
-              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-              BRANCH_NAME="openhands/sbom-$TIMESTAMP"
-
               git add reports/
               git commit -m "chore: update SBOM report"
-
-              if [ -n "$OPENHANDS_BB_USERNAME" ] && [ -n "$OPENHANDS_BB_APP_PASSWORD" ]; then
-                echo "Creating PR for changes..."
-                git checkout -b "$BRANCH_NAME"
-                git push origin "$BRANCH_NAME"
-
-                # Create PR via Bitbucket API
-                curl -s -X POST \
-                  -u "$OPENHANDS_BB_USERNAME:$OPENHANDS_BB_APP_PASSWORD" \
-                  "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG/pullrequests" \
-                  -H "Content-Type: application/json" \
-                  -d "{
-                    \"title\": \"chore: update SBOM report\",
-                    \"source\": { \"branch\": { \"name\": \"$BRANCH_NAME\" } },
-                    \"destination\": { \"branch\": { \"name\": \"main\" } },
-                    \"close_source_branch\": true
-                  }"
-                echo ""
-                echo "PR created successfully!"
-              else
-                echo "No BB credentials, pushing directly to main..."
-                git push origin HEAD
-              fi
+              git push origin HEAD
             else
               echo "No changes to commit"
             fi
@@ -193,40 +139,15 @@ definitions:
           - git config user.name "OpenHands"
           - git config user.email "openhands@all-hands.dev"
 
-          # Create PR or push directly based on available credentials
+          # Commit and push all changes (report + package fixes)
           - |
             if [ -n "$(git status --porcelain)" ]; then
-              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-              BRANCH_NAME="openhands/cve-fixes-$TIMESTAMP"
-
               git add -A
               git commit -m "fix: apply CVE security patches
 
             Automated security fixes applied by OpenHands CVE scanner.
             See reports/cve-*.md for details."
-
-              if [ -n "$OPENHANDS_BB_USERNAME" ] && [ -n "$OPENHANDS_BB_APP_PASSWORD" ]; then
-                echo "Creating PR for CVE fixes..."
-                git checkout -b "$BRANCH_NAME"
-                git push origin "$BRANCH_NAME"
-
-                # Create PR via Bitbucket API
-                curl -s -X POST \
-                  -u "$OPENHANDS_BB_USERNAME:$OPENHANDS_BB_APP_PASSWORD" \
-                  "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG/pullrequests" \
-                  -H "Content-Type: application/json" \
-                  -d "{
-                    \"title\": \"fix: apply CVE security patches\",
-                    \"source\": { \"branch\": { \"name\": \"$BRANCH_NAME\" } },
-                    \"destination\": { \"branch\": { \"name\": \"main\" } },
-                    \"close_source_branch\": true
-                  }"
-                echo ""
-                echo "PR created successfully!"
-              else
-                echo "No BB credentials, pushing directly to main..."
-                git push origin HEAD
-              fi
+              git push origin HEAD
             else
               echo "No CVE fixes needed"
             fi
