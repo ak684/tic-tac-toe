@@ -212,6 +212,9 @@ def generate_report_with_agent(repo_root: Path, scan_results: dict, score_earned
 
     prompt = f"""Generate a CONCISE AI-readiness report for this repository.
 
+IMPORTANT: You are running in a CI environment where terminal commands may timeout.
+Always prefer using file_editor over terminal/bash for all file operations.
+
 AI-READINESS SCORE: {score_pct}% ({score_earned}/{score_possible} points)
 
 EXISTING: {json.dumps(existing_files)}

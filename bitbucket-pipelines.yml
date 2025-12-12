@@ -10,14 +10,18 @@
 # SETUP:
 #   1. Add repository variables in Bitbucket:
 #      Settings → Repository variables
-#      - LLM_API_KEY (secured): Your LLM provider API key
-#      - LLM_MODEL: e.g., "anthropic/claude-sonnet-4-5-20250929"
-#      - LLM_BASE_URL: e.g., "https://api.anthropic.com/v1" (optional)
+#      - OPENHANDS_LLM_API_KEY (secured): Your LLM provider API key
+#      - OPENHANDS_LLM_MODEL: e.g., "anthropic/claude-sonnet-4-5-20250929"
+#      - OPENHANDS_LLM_BASE_URL: e.g., "https://api.anthropic.com/v1" (optional)
 #
-#   2. Optional variables:
+#   2. For PR creation (recommended):
+#      - OPENHANDS_BB_USERNAME: Your Bitbucket username
+#      - OPENHANDS_BB_APP_PASSWORD (secured): App password with repo + PR write
+#
+#   3. Optional variables:
 #      - CVE_FAIL_ON_CRITICAL: "true" to fail build on critical CVEs
 #
-#   3. To schedule runs:
+#   4. To schedule runs:
 #      Settings → Pipelines → Schedules → Add schedule
 #      - Branch: main
 #      - Pipeline: custom: cve-scanner (recommended weekly)
@@ -34,29 +38,21 @@ definitions:
         caches:
           - pip
         script:
-          - |
-            echo "=== DEBUG: Bash Environment Investigation ==="
-            echo "Bash version:"
-            bash --version
-            echo "Current shell: $SHELL"
-            echo "PS1 value: $PS1"
-            echo "PROMPT_COMMAND value: $PROMPT_COMMAND"
-            echo "TERM value: $TERM"
-            echo "TTY info:"
-            tty || echo "No TTY available"
-            echo "Interactive shell flags: $-"
-            echo "=== END DEBUG ==="
-
           - pip install uv
 
-          # Install OpenHands SDK (using pipe-based terminal for CI)
-          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-sdk"
-          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-tools"
+          # Install OpenHands SDK
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-tools"
+
+          # Map OPENHANDS_ variables to what the scripts expect
+          - export LLM_API_KEY="$OPENHANDS_LLM_API_KEY"
+          - export LLM_MODEL="${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
+          - export LLM_BASE_URL="$OPENHANDS_LLM_BASE_URL"
 
           # Validate required variables
           - |
-            if [ -z "$LLM_API_KEY" ]; then
-              echo "Error: LLM_API_KEY repository variable is not set."
+            if [ -z "$OPENHANDS_LLM_API_KEY" ]; then
+              echo "Error: OPENHANDS_LLM_API_KEY repository variable is not set."
               echo "Go to Repository Settings → Repository variables to add it."
               exit 1
             fi
@@ -68,12 +64,37 @@ definitions:
           - git config user.name "OpenHands"
           - git config user.email "openhands@all-hands.dev"
 
-          # Commit and push the report if there are changes
+          # Create PR or push directly based on available credentials
           - |
             if [ -n "$(git status --porcelain)" ]; then
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              BRANCH_NAME="openhands/ai-readiness-$TIMESTAMP"
+
               git add reports/
               git commit -m "chore: update AI readiness report"
-              git push origin HEAD
+
+              if [ -n "$OPENHANDS_BB_USERNAME" ] && [ -n "$OPENHANDS_BB_APP_PASSWORD" ]; then
+                echo "Creating PR for changes..."
+                git checkout -b "$BRANCH_NAME"
+                git push origin "$BRANCH_NAME"
+
+                # Create PR via Bitbucket API
+                curl -s -X POST \
+                  -u "$OPENHANDS_BB_USERNAME:$OPENHANDS_BB_APP_PASSWORD" \
+                  "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG/pullrequests" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"title\": \"chore: update AI readiness report\",
+                    \"source\": { \"branch\": { \"name\": \"$BRANCH_NAME\" } },
+                    \"destination\": { \"branch\": { \"name\": \"main\" } },
+                    \"close_source_branch\": true
+                  }"
+                echo ""
+                echo "PR created successfully!"
+              else
+                echo "No BB credentials, pushing directly to main..."
+                git push origin HEAD
+              fi
             else
               echo "No changes to commit"
             fi
@@ -88,17 +109,22 @@ definitions:
         script:
           - pip install uv
 
-          # Install OpenHands SDK (using pipe-based terminal for CI)
-          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-sdk"
-          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-tools"
+          # Install OpenHands SDK
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-tools"
 
           # Install curl for syft installation
           - apt-get update && apt-get install -y curl
 
+          # Map OPENHANDS_ variables to what the scripts expect
+          - export LLM_API_KEY="$OPENHANDS_LLM_API_KEY"
+          - export LLM_MODEL="${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
+          - export LLM_BASE_URL="$OPENHANDS_LLM_BASE_URL"
+
           # Validate required variables
           - |
-            if [ -z "$LLM_API_KEY" ]; then
-              echo "Error: LLM_API_KEY repository variable is not set."
+            if [ -z "$OPENHANDS_LLM_API_KEY" ]; then
+              echo "Error: OPENHANDS_LLM_API_KEY repository variable is not set."
               echo "Go to Repository Settings → Repository variables to add it."
               exit 1
             fi
@@ -110,12 +136,37 @@ definitions:
           - git config user.name "OpenHands"
           - git config user.email "openhands@all-hands.dev"
 
-          # Commit and push the report if there are changes
+          # Create PR or push directly based on available credentials
           - |
             if [ -n "$(git status --porcelain)" ]; then
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              BRANCH_NAME="openhands/sbom-$TIMESTAMP"
+
               git add reports/
               git commit -m "chore: update SBOM report"
-              git push origin HEAD
+
+              if [ -n "$OPENHANDS_BB_USERNAME" ] && [ -n "$OPENHANDS_BB_APP_PASSWORD" ]; then
+                echo "Creating PR for changes..."
+                git checkout -b "$BRANCH_NAME"
+                git push origin "$BRANCH_NAME"
+
+                # Create PR via Bitbucket API
+                curl -s -X POST \
+                  -u "$OPENHANDS_BB_USERNAME:$OPENHANDS_BB_APP_PASSWORD" \
+                  "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG/pullrequests" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"title\": \"chore: update SBOM report\",
+                    \"source\": { \"branch\": { \"name\": \"$BRANCH_NAME\" } },
+                    \"destination\": { \"branch\": { \"name\": \"main\" } },
+                    \"close_source_branch\": true
+                  }"
+                echo ""
+                echo "PR created successfully!"
+              else
+                echo "No BB credentials, pushing directly to main..."
+                git push origin HEAD
+              fi
             else
               echo "No changes to commit"
             fi
@@ -130,17 +181,22 @@ definitions:
         script:
           - pip install uv
 
-          # Install OpenHands SDK (using pipe-based terminal for CI)
-          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-sdk"
-          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git@fix/pipe-based-terminal-for-ci#subdirectory=openhands-tools"
+          # Install OpenHands SDK
+          - uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-sdk"
+          - uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/software-agent-sdk.git#subdirectory=openhands-tools"
 
           # Install curl for grype installation and Node.js for npm
           - apt-get update && apt-get install -y curl nodejs npm
 
+          # Map OPENHANDS_ variables to what the scripts expect
+          - export LLM_API_KEY="$OPENHANDS_LLM_API_KEY"
+          - export LLM_MODEL="${OPENHANDS_LLM_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
+          - export LLM_BASE_URL="$OPENHANDS_LLM_BASE_URL"
+
           # Validate required variables
           - |
-            if [ -z "$LLM_API_KEY" ]; then
-              echo "Error: LLM_API_KEY repository variable is not set."
+            if [ -z "$OPENHANDS_LLM_API_KEY" ]; then
+              echo "Error: OPENHANDS_LLM_API_KEY repository variable is not set."
               echo "Go to Repository Settings → Repository variables to add it."
               exit 1
             fi
@@ -152,15 +208,40 @@ definitions:
           - git config user.name "OpenHands"
           - git config user.email "openhands@all-hands.dev"
 
-          # Commit and push all changes (report + package fixes)
+          # Create PR or push directly based on available credentials
           - |
             if [ -n "$(git status --porcelain)" ]; then
+              TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+              BRANCH_NAME="openhands/cve-fixes-$TIMESTAMP"
+
               git add -A
               git commit -m "fix: apply CVE security patches
 
-              Automated security fixes applied by OpenHands CVE scanner.
-              See reports/cve-*.md for details."
-              git push origin HEAD
+            Automated security fixes applied by OpenHands CVE scanner.
+            See reports/cve-*.md for details."
+
+              if [ -n "$OPENHANDS_BB_USERNAME" ] && [ -n "$OPENHANDS_BB_APP_PASSWORD" ]; then
+                echo "Creating PR for CVE fixes..."
+                git checkout -b "$BRANCH_NAME"
+                git push origin "$BRANCH_NAME"
+
+                # Create PR via Bitbucket API
+                curl -s -X POST \
+                  -u "$OPENHANDS_BB_USERNAME:$OPENHANDS_BB_APP_PASSWORD" \
+                  "https://api.bitbucket.org/2.0/repositories/$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG/pullrequests" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"title\": \"fix: apply CVE security patches\",
+                    \"source\": { \"branch\": { \"name\": \"$BRANCH_NAME\" } },
+                    \"destination\": { \"branch\": { \"name\": \"main\" } },
+                    \"close_source_branch\": true
+                  }"
+                echo ""
+                echo "PR created successfully!"
+              else
+                echo "No BB credentials, pushing directly to main..."
+                git push origin HEAD
+              fi
             else
               echo "No CVE fixes needed"
             fi

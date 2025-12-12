@@ -198,6 +198,9 @@ def generate_report_with_agent(repo_root: Path, summary: dict) -> str:
 
     prompt = f"""Generate a CONCISE SBOM security and compliance report for this repository.
 
+IMPORTANT: You are running in a CI environment where terminal commands may timeout.
+Always prefer using file_editor over terminal/bash for all file operations.
+
 SBOM SUMMARY:
 - Total Packages: {summary['total_packages']}
 - Package Types: {json.dumps(summary['by_type'])}
